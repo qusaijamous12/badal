@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "424302103101",
+    "project_id": "badal-c59cb",
+    "storage_bucket": "badal-c59cb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:424302103101:android:53cfe88ac1abfd9824f854",
+        "android_client_info": {
+          "package_name": "com.example.badal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAhO9MCFUS8a_bFoat_JiC7sUjBgz0EDqQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

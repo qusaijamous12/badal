@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function itemPath(id) { return /databases/$(database)/documents/items/$(id); }
+    function offerPath(id) { return /databases/$(database)/documents/offers/$(id); }
+    function participant(data) {
+      return signedIn() && (data.ownerId == request.auth.uid || data.requesterId == request.auth.uid);
+    }
+    function basicItem(data) {
+      return data.keys().hasAll(['ownerId', 'ownerName', 'title', 'description', 'category', 'condition', 'wanted', 'image', 'status', 'createdAt'])
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 80
+        && data.description is string && data.description.size() >= 10 && data.description.size() <= 600
+        && data.wanted is string && data.wanted.size() > 0 && data.wanted.size() <= 120
+        && data.image is bytes && data.image.size() > 0 && data.image.size() <= 450000
+        && data.category in ['إلكترونيات', 'ملابس', 'كتب', 'أثاث', 'أدوات منزلية', 'رياضة', 'ألعاب', 'أخرى']
+        && data.condition in ['جديد', 'ممتازة', 'جيدة', 'مستعملة'];
+    }
+    function validOfferItemChange(itemId) {
+      let offer = getAfter(offerPath(request.resource.data.activeOfferId)).data;
+      return signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'activeOfferId'])
+        && offer.ownerId == request.auth.uid
+        && ((offer.targetItemId == itemId && offer.ownerId == resource.data.ownerId)
+          || (offer.offeredItemId == itemId && offer.requesterId == resource.data.ownerId))
+        && ((resource.data.status == 'available' && request.resource.data.status == 'reserved' && offer.status == 'accepted')
+          || (resource.data.status == 'reserved' && resource.data.activeOfferId == request.resource.data.activeOfferId
+              && request.resource.data.status == 'exchanged' && offer.status == 'completed'));
+    }
+    match /items/{itemId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == 'available'
+        && request.resource.data.keys().hasOnly(['ownerId', 'ownerName', 'title', 'description', 'category', 'condition', 'wanted', 'image', 'status', 'createdAt'])
+        && basicItem(request.resource.data);
+      allow update: if (signedIn() && resource.data.ownerId == request.auth.uid
+        && resource.data.status == 'available'
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.status == 'available'
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerName', 'title', 'description', 'category', 'condition', 'wanted', 'image'])
+        && basicItem(request.resource.data))
+        || validOfferItemChange(itemId);
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid && resource.data.status == 'available';
+    }
+    function validNewOffer(data) {
+      return signedIn()
+        && data.keys().hasOnly(['targetItemId', 'offeredItemId', 'targetTitle', 'offeredTitle', 'ownerId', 'requesterId', 'ownerName', 'requesterName', 'status', 'createdAt'])
+        && data.requesterId == request.auth.uid && data.ownerId != request.auth.uid
+        && data.status == 'pending' && data.createdAt == request.time
+        && data.targetItemId is string && data.offeredItemId is string
+        && exists(itemPath(data.targetItemId)) && exists(itemPath(data.offeredItemId))
+        && get(itemPath(data.targetItemId)).data.ownerId == data.ownerId
+        && get(itemPath(data.offeredItemId)).data.ownerId == data.requesterId
+        && get(itemPath(data.targetItemId)).data.status == 'available'
+        && get(itemPath(data.offeredItemId)).data.status == 'available';
+    }
+    function bothItemsAtStatus(data, offerId, status) {
+      return getAfter(itemPath(data.targetItemId)).data.status == status
+        && getAfter(itemPath(data.offeredItemId)).data.status == status
+        && getAfter(itemPath(data.targetItemId)).data.activeOfferId == offerId
+        && getAfter(itemPath(data.offeredItemId)).data.activeOfferId == offerId;
+    }
+    match /offers/{offerId} {
+      allow read: if participant(resource.data);
+      allow create: if validNewOffer(request.resource.data);
+      allow update: if participant(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && (
+          (resource.data.status == 'pending' && request.auth.uid == resource.data.ownerId
+            && request.resource.data.status == 'declined')
+          || (resource.data.status == 'pending' && request.auth.uid == resource.data.requesterId
+            && request.resource.data.status == 'cancelled')
+          || (resource.data.status == 'pending' && request.auth.uid == resource.data.ownerId
+            && request.resource.data.status == 'accepted'
+            && bothItemsAtStatus(resource.data, offerId, 'reserved'))
+          || (resource.data.status == 'accepted' && request.auth.uid == resource.data.ownerId
+            && request.resource.data.status == 'completed'
+            && bothItemsAtStatus(resource.data, offerId, 'exchanged'))
+        );
+      allow delete: if false;
+      match /messages/{messageId} {
+        allow read: if participant(get(offerPath(offerId)).data);
+        allow create: if participant(get(offerPath(offerId)).data)
+          && get(offerPath(offerId)).data.status in ['pending', 'accepted']
+          && request.resource.data.keys().hasOnly(['senderId', 'body', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 1000
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
