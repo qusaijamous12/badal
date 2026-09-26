@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../auth/auth_controller.dart';
 import '../theme.dart';
+import '../success_dialog.dart';
 import 'item_widgets.dart';
 import 'swap_controller.dart';
 import 'swap_models.dart';
@@ -116,7 +117,16 @@ class _ItemFormPageState extends State<ItemFormPage> {
     );
     if (!mounted) return;
     if (error == null) {
-      Navigator.of(context).pop();
+      await showBadalSuccessDialog(
+        title: widget.item == null
+            ? 'تم نشر الغرض بنجاح!'
+            : 'تم حفظ التعديلات بنجاح!',
+        message: widget.item == null
+            ? 'أصبح غرضك في خزانتك وجاهزًا للمقايضة.'
+            : 'تحديثات الغرض محفوظة في خزانتك.',
+        buttonLabel: 'العودة إلى خزانتي',
+      );
+      if (mounted) Navigator.of(context).pop();
     } else {
       ScaffoldMessenger.of(
         context,

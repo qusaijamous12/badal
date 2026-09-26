@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../theme.dart';
+import '../success_dialog.dart';
 import 'auth_controller.dart';
 import 'auth_widgets.dart';
 import 'login_page.dart';
@@ -39,10 +40,14 @@ class _SignUpPageState extends State<SignUpPage> {
       _email.text,
       _password.text,
     );
-    if (!mounted) return;
     if (error == null) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    } else {
+      await showBadalSuccessDialog(
+        title: 'تم إنشاء حسابك بنجاح!',
+        message: 'أهلًا بك في بدل. يمكنك الآن إضافة أغراضك وبدء المقايضة.',
+        buttonLabel: 'ابدأ رحلتك',
+      );
+      Get.key.currentState?.popUntil((route) => route.isFirst);
+    } else if (mounted) {
       setState(() => _error = error);
     }
   }

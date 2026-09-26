@@ -2,7 +2,7 @@
   "name": "badal-firebase-rules-tests",
   "private": true,
   "scripts": {
-    "test": "cd .. && firebase emulators:exec --only firestore --project demo-badal \"node firebase-tests/rules.test.cjs\""
+    "test": "cd .. && firebase emulators:exec --config firebase-test-config.json --only firestore --project demo-badal \"node firebase-tests/rules.test.cjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",

@@ -2,6 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.token.get('admin', false) == true; }
     function itemPath(id) { return /databases/$(database)/documents/items/$(id); }
     function offerPath(id) { return /databases/$(database)/documents/offers/$(id); }
     function participant(data) {
@@ -27,6 +28,12 @@ service cloud.firestore {
           || (resource.data.status == 'reserved' && resource.data.activeOfferId == request.resource.data.activeOfferId
               && request.resource.data.status == 'exchanged' && offer.status == 'completed'));
     }
+    function validAdminItemChange() {
+      return isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && ((resource.data.status == 'available' && request.resource.data.status == 'hidden')
+          || (resource.data.status == 'hidden' && request.resource.data.status == 'available'));
+    }
     match /items/{itemId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid
@@ -40,7 +47,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerName', 'title', 'description', 'category', 'condition', 'wanted', 'image'])
         && basicItem(request.resource.data))
-        || validOfferItemChange(itemId);
+        || validOfferItemChange(itemId)
+        || validAdminItemChange();
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid && resource.data.status == 'available';
     }
     function validNewOffer(data) {
@@ -62,7 +70,7 @@ service cloud.firestore {
         && getAfter(itemPath(data.offeredItemId)).data.activeOfferId == offerId;
     }
     match /offers/{offerId} {
-      allow read: if participant(resource.data);
+      allow read: if participant(resource.data) || isAdmin();
       allow create: if validNewOffer(request.resource.data);
       allow update: if participant(resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
@@ -80,7 +88,7 @@ service cloud.firestore {
         );
       allow delete: if false;
       match /messages/{messageId} {
-        allow read: if participant(get(offerPath(offerId)).data);
+        allow read: if participant(get(offerPath(offerId)).data) || isAdmin();
         allow create: if participant(get(offerPath(offerId)).data)
           && get(offerPath(offerId)).data.status in ['pending', 'accepted']
           && request.resource.data.keys().hasOnly(['senderId', 'body', 'createdAt'])

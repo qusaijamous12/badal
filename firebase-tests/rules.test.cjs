@@ -24,6 +24,7 @@ async function main() {
     const owner = env.authenticatedContext('owner').firestore();
     const requester = env.authenticatedContext('requester').firestore();
     const stranger = env.authenticatedContext('stranger').firestore();
+    const admin = env.authenticatedContext('admin', {admin: true}).firestore();
     await assertSucceeds(owner.doc('items/chair').set(item('owner', 'كرسي خشبي', 'أثاث', 'كتب')));
     await assertSucceeds(requester.doc('items/book').set(item('requester', 'كتاب تاريخ', 'كتب', 'أثاث')));
     await assertFails(stranger.doc('items/forged').set(item('owner', 'غرض مزيف', 'أثاث', 'كتب')));
@@ -35,16 +36,23 @@ async function main() {
     };
     await assertSucceeds(requester.doc('offers/swap').set(offer));
     await assertFails(stranger.doc('offers/swap').get());
+    await assertSucceeds(admin.collection('offers').get());
     await assertSucceeds(owner.doc('offers/swap').get());
     await assertSucceeds(owner.collection('offers').where('ownerId', '==', 'owner').get());
     await assertSucceeds(requester.collection('offers').where('requesterId', '==', 'requester').get());
     await assertSucceeds(requester.doc('offers/swap/messages/hello').set({
       senderId: 'requester', body: 'مرحبًا، هل يناسبك التبادل؟', createdAt: stamp(),
     }));
+    await assertSucceeds(admin.doc('offers/swap/messages/hello').get());
     await assertFails(stranger.doc('offers/swap/messages/fake').set({
       senderId: 'stranger', body: 'رسالة', createdAt: stamp(),
     }));
     await assertFails(requester.doc('offers/swap').update({status: 'accepted'}));
+    await assertFails(stranger.doc('items/chair').update({status: 'hidden'}));
+    await assertSucceeds(admin.doc('items/chair').update({status: 'hidden'}));
+    await assertFails(requester.doc('offers/blocked').set({...offer, targetItemId: 'chair'}));
+    await assertFails(admin.doc('items/chair').update({title: 'تغيير غير مسموح'}));
+    await assertSucceeds(admin.doc('items/chair').update({status: 'available'}));
 
     await assertSucceeds(owner.runTransaction(async (tx) => {
       const offerRef = owner.doc('offers/swap');
